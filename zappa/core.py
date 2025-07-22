@@ -50,6 +50,15 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 ##
+# Constants
+##
+
+# Timeout constants (in seconds)
+LAMBDA_CONNECT_TIMEOUT = 5
+LAMBDA_READ_TIMEOUT = 300  # Note: APIGW limits Lambda to 30s max
+APIGW_LAMBDA_TIMEOUT_LIMIT = 30
+
+##
 # Policies And Template Mappings
 ##
 
@@ -297,8 +306,8 @@ class Zappa:
         # Related: https://github.com/Miserlou/Zappa/issues/205
         long_config_dict = {
             'region_name': aws_region,
-            'connect_timeout': 5,
-            'read_timeout': 300
+            'connect_timeout': LAMBDA_CONNECT_TIMEOUT,
+            'read_timeout': LAMBDA_READ_TIMEOUT
         }
         long_config = botocore.client.Config(**long_config_dict)
 
@@ -572,16 +581,22 @@ class Zappa:
         package_info['build_time'] = build_time
         package_info['build_platform'] = os.sys.platform
         package_info['build_user'] = getpass.getuser()
-        # TODO: Add git head and info?
-
-        # Ex, from @scoates:
-        # def _get_git_branch():
-        #     chdir(DIR)
-        #     out = check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
-        #     lambci_branch = environ.get('LAMBCI_BRANCH', None)
-        #     if out == "HEAD" and lambci_branch:
-        #         out += " lambci:{}".format(lambci_branch)
-        #     return out
+        
+        # Add git information if available
+        try:
+            git_branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                                               cwd=temp_project_path, stderr=subprocess.DEVNULL).decode().strip()
+            git_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], 
+                                               cwd=temp_project_path, stderr=subprocess.DEVNULL).decode().strip()
+            # Handle LambCI branch override
+            lambci_branch = os.environ.get('LAMBCI_BRANCH', None)
+            if git_branch == "HEAD" and lambci_branch:
+                git_branch += " lambci:{}".format(lambci_branch)
+            package_info['git_branch'] = git_branch
+            package_info['git_commit'] = git_commit
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+            # Git not available or not a git repository
+            pass
 
         # def _get_git_hash():
         #     chdir(DIR)

@@ -44,7 +44,7 @@ def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
                     st = os.lstat(s)
                     mode = stat.S_IMODE(st.st_mode)
                     os.lchmod(d, mode)
-                except:
+                except (OSError, AttributeError):
                     pass  # lchmod not available
         elif os.path.isdir(s):
             copytree(s, d, metadata, symlinks, ignore)
@@ -105,7 +105,7 @@ def string_to_timestamp(timestring):
         past = datetime.datetime.utcnow() - delta
         ts = calendar.timegm(past.timetuple())
         return ts
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError):
         pass
 
     if ts:
@@ -175,10 +175,17 @@ def detect_flask_apps():
     return matches
 
 def get_venv_from_python_version():
+    """
+    Returns the python version string used for virtual environment names.
+    Format: pythonX.Y (e.g., python3.8)
+    """
     return 'python{}.{}'.format(*sys.version_info)
 
 def get_runtime_from_python_version():
     """
+    Returns the appropriate Lambda runtime string for the current Python version.
+    
+    Raises ValueError if Python 2.x is detected (no longer supported).
     """
     if sys.version_info[0] < 3:
         raise ValueError("Python 2.x is no longer supported.")
@@ -195,7 +202,15 @@ def get_runtime_from_python_version():
 ##
 
 def get_topic_name(lambda_name):
-    """ Topic name generation """
+    """
+    Generate SNS topic name for async Lambda function.
+    
+    Args:
+        lambda_name (str): The name of the Lambda function
+        
+    Returns:
+        str: SNS topic name in format '{lambda_name}-zappa-async'
+    """
     return '%s-zappa-async' % lambda_name
 
 ##
@@ -259,7 +274,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     Enabled=self.enabled
                     )
                 LOG.debug(response)
-            except Exception:
+            except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
                 LOG.exception('Unable to add event source')
 
         def enable(self, function):
@@ -271,7 +286,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     Enabled=self.enabled
                     )
                 LOG.debug(response)
-            except Exception:
+            except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
                 LOG.exception('Unable to enable event source')
 
         def disable(self, function):
@@ -283,7 +298,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     Enabled=self.enabled
                     )
                 LOG.debug(response)
-            except Exception:
+            except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
                 LOG.exception('Unable to disable event source')
 
         def update(self, function):
@@ -297,7 +312,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                         Enabled=self.enabled,
                         FunctionName=function.arn)
                     LOG.debug(response)
-                except Exception:
+                except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
                     LOG.exception('Unable to update event source')
 
         def remove(self, function):
@@ -343,7 +358,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                         AttributeValue=json.dumps(self.filters)
                     )
                     kappa.event_source.sns.LOG.debug(response)
-            except Exception:
+            except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
                 kappa.event_source.sns.LOG.exception('Unable to add filters for SNS topic %s', self.arn)
 
         def add(self, function):
